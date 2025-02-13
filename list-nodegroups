@@ -1,0 +1,2 @@
+#! /bin/bash
+kubectl get nodes -o json | jq -r '.items[] | [.metadata.labels."alpha.eksctl.io/nodegroup-name",.metadata.labels.role,.metadata.labels.size // "undef",.metadata.labels."kubernetes.io/hostname",.status.capacity.pods,.status.nodeInfo.kubeletVersion,if(.spec.unschedulable) then "SchedulingDisabled" else empty end] | @tsv'

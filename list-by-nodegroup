@@ -1,0 +1,14 @@
+if [ -z "$1" ]
+then
+  echo "Usage: $0 <nodegroup>"
+  exit 1
+fi
+
+echo Nodegroup:$1
+NG=$(list-nodegroups | awk '$1=="'$1'" {print $4}' | tr '\n' '|' | sed -e 's/|$//')
+if [ -n "$NG" ]
+then
+ list-by-node | egrep "$NG"
+else
+  echo "No nodes"
+fi

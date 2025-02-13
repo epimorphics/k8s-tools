@@ -1,0 +1,3 @@
+#!/bin/bash
+# List pods by which node they are running in
+kubectl get pod -o=custom-columns=NODE:.spec.nodeName,NAME:.metadata.name,NAMESPACE:.metadata.namespace,STATUS:.status.phase -A  | sort -r

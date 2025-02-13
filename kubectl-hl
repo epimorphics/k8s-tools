@@ -1,0 +1,160 @@
+#! /usr/bin/python3
+
+import os, sys
+import argparse
+import re
+import simplejson
+from prettytable import PrettyTable,PLAIN_COLUMNS,DOUBLE_BORDER,MARKDOWN
+
+# https://github.com/kubernetes-client/python/tree/master/kubernetes/docs
+from kubernetes import client, config
+
+def Done(phase):
+    return( True if (phase in ["Completed", "Succeeded"]) else False)
+
+def OK(phase):
+    return( True if (phase in ["Completed", "Running", "Succeeded"]) else False)
+
+def Phase(phase):
+    return(phase if (OK(phase)) else phase.upper())
+
+def msg(name=None):
+    return '''
+    kubectl hl [--context <kubeconfi context>]
+               [--no-borders] [--no-headers] [l <label selector>]
+               [-A|-n <namespace>[,<namespace>...]
+               [-c|-C|-s|-S]
+               [-N <node>[,<node>]...] 
+               [-G <nodegroup> ] [-V <kubernetes version> ] 
+
+    Options:
+
+    -c  List all containers in selected pods.
+    -C  List failing containers in selected pods.
+    -s  List all status transitions in selected pods.
+    -S  List failing status transitions in selected pods.
+
+    -G  Filter by EKS Nodegroup. Incompatible with -N.
+    -V  Filter by Kubernetes Node version. Ignored with -N.
+    -N  Filter by comma separated list of nodes. Incompatible with -G.
+
+    --context, -A, -n, -l as standard.
+
+    Format options: --no-borders, --double-borders(-D), --markdown(-M) and 
+                    --no-headers.
+
+    When none of -c,-C,-s or -S options are given the output displays the
+    status of a pod's containers: 
+
+    R/I    Number of ready/total init containers.
+    S/R/C  Number of started/ready/total standard containers (non-init)
+    E      An * indicates a pod in not ready or in startup. 
+'''
+
+# Read arguments from the command line
+# Initiate the parser (https://docs.python.org/3/library/argparse.html)
+parser = argparse.ArgumentParser(usage=msg())
+parser.add_argument("-l", "--label",  dest="label_selector", help="Restrict the list of pods by their labels", type=str, action="store", required=False, default='')
+group1 = parser.add_mutually_exclusive_group()
+group1.add_argument("-A", "--all-namespaces", dest="all", help="All namespaces.", action="store_true", required=False, default=False)
+group1.add_argument("-n", "--namespaces",  dest="namespaces", help="Comma separated list of namespaces.", type=str, action="store", required=False, default='default')
+group2 = parser.add_mutually_exclusive_group()
+group2.add_argument("-G", "--nodegroup",  dest="nodegroup", help="Filter by nodegroup.", type=str, action="store", required=False)
+group2.add_argument("-N", "--nodes",  dest="nodes", help="Comma separated list of nodes.", type=str, action="store", required=False)
+parser.add_argument("-V", "--version",  dest="version", help="Filter by kubernetes node Version.", type=str, action="store", required=False)
+group3 = parser.add_mutually_exclusive_group()
+group3.add_argument("-c", "--containers",    dest="containers",    help="Display container status.", action="store_true", required=False, default=False)
+group3.add_argument("-C", "--failed_containers", dest="failed_containers", help="Display failed container status.", action="store_true", required=False, default=False)
+group3.add_argument("-s", "--status",  dest="status", help="Display pod status transitions.", action="store_true", required=False, default=False)
+group3.add_argument("-S", "--fail_status",  dest="fail_status", help="Display pod status transitions.", action="store_true", required=False, default=False)
+parser.add_argument("--context",  dest="context", help="Kubernetes context.", type=str, action="store", required=False)
+parser.add_argument("--no-headers",  dest="noheaders", help=".", action="store_true", required=False)
+group4 = parser.add_mutually_exclusive_group()
+group4.add_argument("--no-borders",  dest="noborders", help=".", action="store_true", required=False)
+group4.add_argument("-D", "--double-borders",  dest="double_borders", help=".", action="store_true", required=False)
+group4.add_argument("-M", "--markdown",  dest="markdown", help=".", action="store_true", required=False)
+args = parser.parse_args()
+
+# Configs can be set in Configuration class directly or using helper utility
+config.load_kube_config(context=args.context)
+v1 = client.CoreV1Api()
+
+# Get a list of nodes we are interested in
+if (args.namespaces):
+    namespaces = args.namespaces.split(",")
+if (args.nodes):
+    if (args.nodegroup):
+        print(msg())
+        exit(1)
+    nodes = args.nodes.split(",")
+else:
+    nodes = []
+    node_list = v1.list_node(label_selector=('eks.amazonaws.com/nodegroup = %s' % args.nodegroup) if (args.nodegroup) else None)
+    for item in node_list.items:
+        if (args.version):
+            if (re.search(args.version, item.status.node_info.kubelet_version)):
+                nodes.append(item.metadata.labels['kubernetes.io/hostname'])
+        else:
+            nodes.append(item.metadata.labels['kubernetes.io/hostname'])
+
+if not nodes:
+    print("No nodes found\n")
+    exit(1)
+
+# https://pypi.org/project/prettytable/
+table = PrettyTable()
+table.align = "l"
+if (args.noborders):
+    table.set_style(PLAIN_COLUMNS)
+elif (args.double_borders):
+    table.set_style(DOUBLE_BORDER)
+elif (args.markdown):
+    table.set_style(MARKDOWN)
+if (args.noheaders):
+    table.header = False
+
+if (args.containers or args.failed_containers):
+    table.field_names = ["Node", "Phase", "Namespace", "Pod", "Container", "Running", "Ready", "Restarts"]
+    table.align["Restarts"] = "r"
+elif (args.status or args.fail_status):
+    table.field_names = ["Node", "Phase", "Namespace", "Pod", "Time", "Transition", "Status", "Message"]
+else:
+    table.field_names = ["Node", "Phase", "Namespace", "Pod", "R/I S/R/C E"]
+
+# Get the pods
+ret = v1.list_pod_for_all_namespaces(watch=False,label_selector=args.label_selector)
+for item in ret.items:
+    if args.all or item.metadata.namespace in namespaces:
+        if (not args.nodes and not args.nodegroup) or item.spec.node_name in nodes:
+            if (args.containers or args.failed_containers):
+                container_statuses = item.status.container_statuses
+                if (item.status.init_container_statuses):
+                    container_statuses = item.status.init_container_statuses + item.status.container_statuses
+                if (container_statuses):
+                    for j in container_statuses:
+                        if (args.containers or (not Done(item.status.phase) and (not j.ready))):
+                            table.add_row( [item.spec.node_name, Phase(item.status.phase), item.metadata.namespace, item.metadata.name, j.name, j.started, j.ready, j.restart_count] )
+            elif (args.status or args.fail_status):
+                for j in sorted(item.status.conditions, key=lambda x: x.last_transition_time):
+                    if (args.status or (not Done(item.status.phase) and j.status=='False')):
+                        table.add_row( [item.spec.node_name, Phase(item.status.phase), item.metadata.namespace, item.metadata.name, j.last_transition_time.strftime("%H:%M:%S"), j.type, j.status, j.message if (j.message) else ''] )
+            else:
+                init = "-/-"
+                init_c = init_r = 0
+                if (item.status.init_container_statuses):
+                    for j in item.status.init_container_statuses:
+                        init_c += 1
+                        if (j.ready):
+                            init_r += 1
+                    init = "%d/%d" % (init_r, init_c)
+                if (item.status.container_statuses):
+                    c = r = s = 0
+                    for j in item.status.container_statuses:
+                        c += 1
+                        if (j.ready):
+                            r += 1
+                        if (j.started):
+                            s += 1
+                    table.add_row([ item.spec.node_name, Phase(item.status.phase), item.metadata.namespace, item.metadata.name, "%s %d/%d/%d%s" % (init,s,r,c, '' if (c==r or Done(item.status.phase)) else " *")])
+
+print(table)
