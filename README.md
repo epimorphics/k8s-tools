@@ -1,5 +1,8 @@
-# k8s-toole
+# k8s-tools
 
+## buffer
+
+Circluar butter tool. See buufer -h for usage.
 
 ## hl.pl
 

@@ -1,0 +1,98 @@
+#! /usr/bin/perl
+
+use Getopt::Std;
+use File::Basename;
+
+my $PROG = basename($0);
+my $VERSION = "1.00";
+
+$| = 1; # Don't buffer
+
+unless (getopts('chloO:qr:R:s:v')) { Help(); exit 1; }
+if ($opt_v) { print "Version: ".$VERSION."\n"; exit 0; }
+if ($opt_h) { Usage(); Help(); exit 0; }
+if ($opt_o && !$opt_R) { Usage(); Error(); exit 0; }
+if ($opt_o && $opt_O) { Usage(); Error(); exit 0; }
+
+# Globals
+my $size = $opt_s // 100;
+my $i = 0;
+my $toggle = $opt_q ? 1 : 0; # Toggled on startup
+my $output = $opt_O // ($opt_o ? $opt_R : "");
+
+my @buffer;
+
+# Signal Handles
+$SIG{USR1} = \&Toggle;
+$SIG{HUP}  = \&Dump;
+
+sub Usage {
+  print "Usage:\n";
+  print "  $PROG [-c] [-l] [-o | -O <regexp>] [-q] [-r <regexp>] [-R <regexp>] [-s size]\n";
+  print "  $PROG [-h]\n";
+  print "  $PROG [-v]\n";
+  print "\n";
+  print "  -c\t\tDisplay state of the capture toggle.\n";
+  print "  -h\t\tDisplay help message.\n";
+  print "  -l\t\tBracket buffer output with dashed line.\n";
+  print "  -o\t\tDisplay buffer contents on matching with -R regexp.\n";
+  print "  -O <regexp>\tDisplay buffer contents on matching regular expression.\n";
+  print "  -q\t\tCapture is initially disabled.\n";
+  print "  -r <regexp>\tBegin capture on matching regular expression. Implies -q.\n";
+  print "  -R <regexp>\tStop capture on matching regular expression.\n";
+  print "  -s <size>\tSize of the buffer in lines. Default 100.\n";
+  print "  -v\t\tDisplay verson.\n";
+  print "\n";
+}
+
+sub Help {
+  print "Capture stdout into a circular buffer.\n";
+  print "The size of the buffer is given by -s option in lines.\n\n";
+  print "Capture is alternately enabled/disabled on receipt of a USR1 signal.\n";
+  print "The inital state being set by the presence or not of -q option.\n\n";
+  print "Capture may also be enabled/disable by -r and -R options respectively.\n\n";
+  print "The contents of the buffer are written to stdout on receiving a HUP signal,\n";
+  print "when matching with -R option if the -o option is also present or when\n";
+  print "matching with -O option, and on termination when neither -o or -O are present.\n";
+  print "\n";
+}
+
+sub Error {
+  print "-o requires -R\n" if ($opt_o && !$opt_R);
+  print "-o and -O are mutually exclusive\n" if ($opt_o && $opt_O);
+  print "\n";
+}
+
+sub Line {
+  return unless $opt_l;
+  my $width = `tput cols`;
+  print "-" x $width . "\n";
+}
+
+sub Dump {
+  Line;
+  for my $j (0 .. $size-1) {
+    my $k = ($j + $i) % $size;
+    printf("%s\n", $buffer[$k]) if ($buffer[$k]);
+    $buffer[$k] = "";
+  }
+  Line;
+}
+
+sub Toggle {
+  $toggle = !$toggle;
+  printf STDERR ("Capture %s\n", $toggle ? "On" : "Off") if ($opt_c);
+}
+
+Toggle();
+while(<>) {
+  chomp;
+  my $line = $_;
+  $toggle = 1 if ($opt_r and $line =~ /$opt_r/);
+  $buffer[$i++] = $line if ($toggle);
+  $i = 0 unless ($i < $size);
+  $toggle = 0 if ($opt_R and $line =~ /$opt_R/);
+  Dump() if ($output and $line =~ /$output/);
+}
+
+Dump unless ($output);
