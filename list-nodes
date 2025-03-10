@@ -1,2 +1,2 @@
 #! /bin/bash
-kubectl get nodes -o json | jq -r '.items[] | [.metadata.labels."alpha.eksctl.io/nodegroup-name",.metadata.labels."kubernetes.io/hostname",.status.capacity.pods,.status.nodeInfo.kubeletVersion,.metadata.creationTimestamp,.metadata.labels."node.kubernetes.io/instance-type"] | @tsv'
+kubectl get nodes -o json | jq -r '.items[] | [.metadata.labels."alpha.eksctl.io/nodegroup-name",.metadata.labels."kubernetes.io/hostname",.metadata.labels."topology.kubernetes.io/zone",.status.capacity.pods,.status.nodeInfo.kubeletVersion,.metadata.creationTimestamp,.metadata.labels."node.kubernetes.io/instance-type"] | @tsv'
