@@ -1,23 +1,29 @@
 # k8s-tools
 
-## buffer
-
-Circluar butter tool. See buufer -h for usage.
-
 ## hl.pl
 
 A simple perl script to highlight Pending and pods and pods where all container have not started.
 ```
-kubectl get pods -Aw | ./hl.pl
+kubectl get pods -Aw | hl.pl
 ```
 
 ## kubectl-hl
 
 ### Installation
 
+#### pip
+
 * kubectl-hl must be on PATH
 * pip install kubernetes
 * pip install prettytable
+
+#### Ubuntu Packages
+
+* python3-simplejson
+* python3-prettytable
+* python3-google-auth
+* python3-requests-oauthlib
+* python3-kubernetes (See https://launchpad.net/ubuntu/noble/arm64/python3-kubernetes/)
 
 ### Usage:
 ```
