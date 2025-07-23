@@ -4,7 +4,7 @@ import os, sys
 import argparse
 import re
 import simplejson
-import datetime
+import time
 from prettytable import PrettyTable,PLAIN_COLUMNS,DOUBLE_BORDER,MARKDOWN
 
 # https://github.com/kubernetes-client/python/tree/master/kubernetes/docs
@@ -102,18 +102,18 @@ if not nodes:
     print("No nodes found\n")
     exit(1)
 
-now =  datetime.datetime.now(datetime.timezone.utc)
+now =  time.time()
 
 def Age(past):
-    elapsed = now - past
-    if elapsed < datetime.timedelta(seconds=2 * 60):
-        return "%s (%ds)" % (past.strftime("%Y-%m-%d %H:%M:%S"), elapsed.seconds)
-    elif elapsed < datetime.timedelta(seconds=2 * 60 * 60):
-        return "%s (%dm)" % (past.strftime("%Y-%m-%d %H:%M:%S"), (elapsed.seconds / 60) )
-    elif elapsed < datetime.timedelta(seconds=2 * 60 * 60 * 24 - 1):
-        return "%s (%dh)" % (past.strftime("%Y-%m-%d %H:%M:%S"), (elapsed.seconds / 3600) )
+    elapsed = now - past.timestamp()
+    if (elapsed < 120):
+        return "%s (%ds)" % (past.strftime("%Y-%m-%d %H:%M:%S"), int(elapsed))
+    elif (elapsed < 2 * 60 * 60):
+        return "%s (%dm)" % (past.strftime("%Y-%m-%d %H:%M:%S"), int(elapsed / 60))
+    elif (elapsed < 2 * 24 * 60 * 60):
+        return "%s (%dh)" % (past.strftime("%Y-%m-%d %H:%M:%S"), int(elapsed / 3600))
     else:
-        return "%s (%dd)" % (past.strftime("%Y-%m-%d %H:%M:%S"), elapsed.days)
+        return "%s (%dd)" % (past.strftime("%Y-%m-%d %H:%M:%S"), int(elapsed / (3600 * 24)))
 
 # https://pypi.org/project/prettytable/
 table = PrettyTable()
@@ -171,5 +171,7 @@ for item in ret.items:
                         if (j.started):
                             s += 1
                     table.add_row([ item.spec.node_name, Phase(item.status.phase), item.metadata.namespace, item.metadata.name, Age(item.metadata.creation_timestamp), "%s %d/%d/%d%s" % (init,s,r,c, '' if (c==r or Done(item.status.phase)) else " *")])
+                else:
+                    table.add_row([ item.spec.node_name, Phase(item.status.phase), item.metadata.namespace, item.metadata.name, Age(item.metadata.creation_timestamp), "-/- -/-/- *"])
 
 print(table)
