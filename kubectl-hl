@@ -138,9 +138,11 @@ else:
 # Get the pods
 ret = v1.list_pod_for_all_namespaces(watch=False,label_selector=args.label_selector)
 for item in ret.items:
-#   print(item)
+    # Filter by namespace
     if args.all or item.metadata.namespace in namespaces:
-        if (not args.nodes and not args.nodegroup) or item.spec.node_name in nodes:
+        # Filter by node
+        if item.spec.node_name == 'None' or item.spec.node_name in nodes:
+            # -c/-C: List containers
             if (args.containers or args.failed_containers):
                 container_statuses = item.status.container_statuses
                 if (item.status.init_container_statuses):
@@ -149,10 +151,12 @@ for item in ret.items:
                     for j in container_statuses:
                         if (args.containers or (not Done(item.status.phase) and (not j.ready))):
                             table.add_row( [item.spec.node_name, Phase(item.status.phase), item.metadata.namespace, item.metadata.name, j.name, j.started, j.ready, j.restart_count] )
+            # -s/-S: List status transitions
             elif (args.status or args.fail_status):
                 for j in sorted(item.status.conditions, key=lambda x: x.last_transition_time):
                     if (args.status or (not Done(item.status.phase) and j.status=='False')):
                         table.add_row( [item.spec.node_name, Phase(item.status.phase), item.metadata.namespace, item.metadata.name, Age(j.last_transition_time), j.type, j.status, j.message if (j.message) else ''] )
+            # default use case
             else:
                 init = "-/-"
                 init_c = init_r = 0
