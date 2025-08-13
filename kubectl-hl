@@ -69,6 +69,7 @@ group3.add_argument("-C", "--failed_containers", dest="failed_containers", help=
 group3.add_argument("-s", "--status",  dest="status", help="Display pod status transitions.", action="store_true", required=False, default=False)
 group3.add_argument("-S", "--fail_status",  dest="fail_status", help="Display pod status transitions.", action="store_true", required=False, default=False)
 parser.add_argument("--context",  dest="context", help="Kubernetes context.", type=str, action="store", required=False)
+parser.add_argument("--since",  dest="since", help="Since date/time.", type=str, action="store", required=False)
 parser.add_argument("--no-headers",  dest="noheaders", help=".", action="store_true", required=False)
 group4 = parser.add_mutually_exclusive_group()
 group4.add_argument("--no-borders",  dest="noborders", help=".", action="store_true", required=False)
@@ -103,6 +104,15 @@ if not nodes:
     exit(1)
 
 now =  time.time()
+if (args.since):
+    try:
+        since = time.strptime(args.since, "%Y-%m-%d %H:%M:%S")
+        since = time.mktime(since)
+    except ValueError:
+        print("Invalid date/time format for --since. Use YYYY-MM-DD HH:MM:SS")
+        exit(1)
+else:
+    since = None
 
 def Age(past):
     elapsed = now - past.timestamp()
@@ -140,6 +150,8 @@ ret = v1.list_pod_for_all_namespaces(watch=False,label_selector=args.label_selec
 for item in ret.items:
     # Filter by namespace
     if args.all or item.metadata.namespace in namespaces:
+        if since and item.metadata.creation_timestamp and item.metadata.creation_timestamp.timestamp() < since:
+            continue
         # Filter by node
         if item.spec.node_name == 'None' or item.spec.node_name in nodes:
             # -c/-C: List containers
@@ -154,6 +166,8 @@ for item in ret.items:
             # -s/-S: List status transitions
             elif (args.status or args.fail_status):
                 for j in sorted(item.status.conditions, key=lambda x: x.last_transition_time):
+                    if since and j.last_transition_time.timestamp() < since:
+                        continue
                     if (args.status or (not Done(item.status.phase) and j.status=='False')):
                         table.add_row( [item.spec.node_name, Phase(item.status.phase), item.metadata.namespace, item.metadata.name, Age(j.last_transition_time), j.type, j.status, j.message if (j.message) else ''] )
             # default use case
