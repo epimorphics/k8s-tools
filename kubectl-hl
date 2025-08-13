@@ -24,9 +24,10 @@ def msg(name=None):
     kubectl hl [--context <kubeconfi context>]
                [--no-borders] [--no-headers] [l <label selector>]
                [-A|-n <namespace>[,<namespace>...]
-               [-c|-C|-s|-S]
+               [-c|-C|-s|-S] [-r]
                [-N <node>[,<node>]...] 
-               [-G <nodegroup> ] [-V <kubernetes version> ] 
+               [-G <nodegroup> ] [-V <kubernetes version> ]
+               [--since <YYYY-MM-DD HH:MM:SS>]
 
     Options:
 
@@ -39,7 +40,11 @@ def msg(name=None):
     -V  Filter by Kubernetes Node version. Ignored with -N.
     -N  Filter by comma separated list of nodes. Incompatible with -G.
 
+    -r Only show pods expected to be running. This is useful to filter out
+       completed jobs.
+
     --context, -A, -n, -l as standard.
+    --since  Filter pods created/transition after the given date/time.
 
     Format options: --no-borders, --double-borders(-D), --markdown(-M) and 
                     --no-headers.
@@ -69,6 +74,7 @@ group3.add_argument("-C", "--failed_containers", dest="failed_containers", help=
 group3.add_argument("-s", "--status",  dest="status", help="Display pod status transitions.", action="store_true", required=False, default=False)
 group3.add_argument("-S", "--fail_status",  dest="fail_status", help="Display pod status transitions.", action="store_true", required=False, default=False)
 parser.add_argument("--context",  dest="context", help="Kubernetes context.", type=str, action="store", required=False)
+parser.add_argument("-r", "--running",  dest="running", help="Only show pod expected to be running", action="store_true", required=False)
 parser.add_argument("--since",  dest="since", help="Since date/time.", type=str, action="store", required=False)
 parser.add_argument("--no-headers",  dest="noheaders", help=".", action="store_true", required=False)
 group4 = parser.add_mutually_exclusive_group()
@@ -151,6 +157,8 @@ for item in ret.items:
     # Filter by namespace
     if args.all or item.metadata.namespace in namespaces:
         if since and item.metadata.creation_timestamp and item.metadata.creation_timestamp.timestamp() < since:
+            continue
+        if (args.running and Done(item.status.phase)):
             continue
         # Filter by node
         if item.spec.node_name == 'None' or item.spec.node_name in nodes:
