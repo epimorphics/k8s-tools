@@ -155,13 +155,14 @@ else:
 ret = v1.list_pod_for_all_namespaces(watch=False,label_selector=args.label_selector)
 for item in ret.items:
     # Filter by namespace
+    # print(item.metadata.name, item.metadata.namespace, item.spec.node_name, item.status.phase)
     if args.all or item.metadata.namespace in namespaces:
         if since and item.metadata.creation_timestamp and item.metadata.creation_timestamp.timestamp() < since:
             continue
         if (args.running and Done(item.status.phase)):
             continue
         # Filter by node
-        if item.spec.node_name == 'None' or item.spec.node_name in nodes:
+        if item.spec.node_name is None or item.spec.node_name in nodes:
             # -c/-C: List containers
             if (args.containers or args.failed_containers):
                 container_statuses = item.status.container_statuses
