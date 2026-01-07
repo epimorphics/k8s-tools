@@ -5,6 +5,7 @@ import argparse
 import re
 import simplejson
 import time
+import dateparser
 from prettytable import PrettyTable,PLAIN_COLUMNS,DOUBLE_BORDER,MARKDOWN
 
 # https://github.com/kubernetes-client/python/tree/master/kubernetes/docs
@@ -112,10 +113,9 @@ if not nodes:
 now =  time.time()
 if (args.since):
     try:
-        since = time.strptime(args.since, "%Y-%m-%d %H:%M:%S")
-        since = time.mktime(since)
-    except ValueError:
-        print("Invalid date/time format for --since. Use YYYY-MM-DD HH:MM:SS")
+        since = time.mktime(dateparser.parse(args.since, languages=['en']).timetuple())
+    except AttributeError:
+        print("Invalid date/time format for --since.")
         exit(1)
 else:
     since = None
