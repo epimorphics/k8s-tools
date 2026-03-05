@@ -174,11 +174,14 @@ for item in ret.items:
                             table.add_row( [item.spec.node_name, Phase(item.status.phase), item.metadata.namespace, item.metadata.name, j.name, j.started, j.ready, j.restart_count] )
             # -s/-S: List status transitions
             elif (args.status or args.fail_status):
-                for j in sorted(item.status.conditions, key=lambda x: x.last_transition_time):
-                    if since and j.last_transition_time.timestamp() < since:
-                        continue
-                    if (args.status or (not Done(item.status.phase) and j.status=='False')):
-                        table.add_row( [item.spec.node_name, Phase(item.status.phase), item.metadata.namespace, item.metadata.name, Age(j.last_transition_time), j.type, j.status, j.message if (j.message) else ''] )
+                if item.status.conditions:
+                    for j in sorted(item.status.conditions, key=lambda x: x.last_transition_time):
+                        if since and j.last_transition_time.timestamp() < since:
+                            continue
+                        if (args.status or (not Done(item.status.phase) and j.status=='False')):
+                            table.add_row( [item.spec.node_name, Phase(item.status.phase), item.metadata.namespace, item.metadata.name, Age(j.last_transition_time), j.type, j.status, j.message if (j.message) else ''] )
+                else: # briefly, when a pod is created but not yet scheduled, it has no conditions and the phase is Pending. In this case we just show the pod status without transitions.
+                    table.add_row( [item.spec.node_name, Phase(item.status.phase), item.metadata.namespace, item.metadata.name, '', '', '', '' ] )
             # default use case
             else:
                 init = "-/-"
